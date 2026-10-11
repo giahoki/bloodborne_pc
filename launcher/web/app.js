@@ -509,7 +509,7 @@
     const page = (id, title, items) => ({ id, title, subtitle: 'Хранится в bbport.ini; в игре меняется через меню (Insert).', items });
     return {
       init: async () => ({
-        version: '2.0', lang: 'ru', art: null, state,
+        version: '2.1', lang: 'ru', art: null, state,
         text: { play: 'ИГРАТЬ', stop: 'Остановить', by: 'by giahoki', subtitle: 'нативный порт · Windows',
           insert: 'В игре: Insert открывает меню порта\n(геймпад: нажать оба стика).', ready: 'Проверка', quick: 'Основное',
           copy: 'Копировать', clear: 'Очистить', browse: 'Обзор…', open: 'Открыть', update: 'Обновить',

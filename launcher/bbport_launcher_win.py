@@ -40,7 +40,7 @@ PATCH_VERSION = '01.09'
 MAX_LOG_LINES = 6000
 NO_WINDOW = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
 # This build; GitHub release tags are windows-v<VERSION>.
-VERSION = '2.0'
+VERSION = '2.1'
 # Co-op: the community server that answers the game's own server requests.
 COMMUNITY_SERVER = 'https://thehuntersdream.com'
 RELEASES_API = 'https://api.github.com/repos/giahoki/bloodborne_pc/releases/latest'
@@ -139,8 +139,8 @@ EFFECTS = [
 ]
 EXTRAS = [
     ('skip_intro', ('Skip the intro logos and movie', 'Пропуск заставок при запуске'), False),
-    ('debug_camera', ('Free camera (hold Interact and press Jump: E + F)',
-                      'Свободная камера (удерживать «Взаимодействие» и нажать «Прыжок»: E + F)'), False),
+    ('debug_camera', ('Free camera (hold Interact and press L3: E + F)',
+                      'Свободная камера (удерживать «Взаимодействие» и нажать L3: E + F)'), False),
     ('debug_menu', ('Game debug menu (the Gestures key, G; needs the debug fonts)',
                     'Debug menu игры (клавиша жестов, G; нужны шрифты)'), False),
 ]
@@ -150,9 +150,9 @@ CHEATS = [
     ('cheat_stealth', ('Enemies do not see you (unless attacked)', 'Враги не видят вас (пока не атакованы)'), False),
     ('cheat_silent', ('Enemies do not hear you', 'Враги не слышат вас'), False),
     ('cheat_rally_no_decay', ('Rally never fades', 'Rally не угасает'), False),
-    ('cheat_enemy_control', ('Control the targeted enemy (Lock on, Q, takes control; Jump, F, goes back; '
+    ('cheat_enemy_control', ('Control the targeted enemy (Lock on, Q, takes control; L3, F, goes back; '
                              'not with the free camera)',
-                             'Управление выбранным врагом («Захват цели», Q — взять; «Прыжок», F — вернуться; '
+                             'Управление выбранным врагом («Захват цели», Q — взять; L3, F — вернуться; '
                              'не вместе со свободной камерой)'), False),
 ]
 TWEAKS = [
@@ -171,8 +171,8 @@ KEY_BINDINGS = [
         ('move_back', ('Back', 'Назад'), 'S'),
         ('move_left', ('Left', 'Влево'), 'A'),
         ('move_right', ('Right', 'Вправо'), 'D'),
-        ('dodge_run', ('Dodge / run (hold)', 'Уклонение / бег (удерживать)'), 'Space'),
-        ('jump', ('Jump', 'Прыжок'), 'F'),
+        ('dodge_run', ('Dodge / run (hold), jump (press again while running)', 'Уклонение / бег (удерживать), прыжок (нажать ещё раз на бегу)'), 'Space'),
+        ('jump', ('L3 (free camera, enemy control)', 'L3 (свободная камера, управление врагом)'), 'F'),
     ]),
     (('Combat', 'Бой'), [
         ('attack', ('Attack', 'Атака'), 'Mouse1'),

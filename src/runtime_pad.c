@@ -107,7 +107,7 @@ static const Action actions[]={
     {"move_forward",0,AX_LY,-1,0,"W"}, {"move_back",0,AX_LY,1,0,"S"},
     {"move_left",0,AX_LX,-1,0,"A"}, {"move_right",0,AX_LX,1,0,"D"},
     {"dodge_run",BTN_CIRCLE,-1,0,0,"Space"},
-    {"jump",BTN_L3,-1,0,0,"F"},
+    {"jump",BTN_L3,-1,0,0,"F"}, /* L3: free camera, enemy control; jumping is dodge_run again while running */
     {"interact",BTN_CROSS,-1,0,0,"E|Return"},
     {"back",BTN_CIRCLE,-1,0,0,"Backspace"},
     {"attack",BTN_R1,-1,0,0,"Mouse1"},
@@ -145,7 +145,9 @@ static int parse_input(const char *text, Input *in) {
         text=plus+1;
     }
     if (!SDL_strncasecmp(text,"Mouse",5) && text[5]>='1' && text[5]<='5' && !text[6]) {
-        in->type=IN_MOUSE; in->code=(int16_t)(text[5]-'0'); return 1;
+        /* Windows numbering, as in the launcher: Mouse2 right, Mouse3 middle (SDL: 3 and 2). */
+        static const int16_t sdl_button[6]={0,1,3,2,4,5};
+        in->type=IN_MOUSE; in->code=sdl_button[text[5]-'0']; return 1;
     }
     if (!SDL_strcasecmp(text,"WheelUp")) { in->type=IN_WHEEL; in->code=1; return 1; }
     if (!SDL_strcasecmp(text,"WheelDown")) { in->type=IN_WHEEL; in->code=-1; return 1; }
@@ -209,6 +211,48 @@ static uint8_t stick_byte(float v) {
     int x=(int)(128.0f+v*127.5f);
     return (uint8_t)(x<0 ? 0 : x>255 ? 255 : x);
 }
+/* Walking on keys. A pad stick never jumps: switching W to D passes through the diagonal and
+ * never through the centre, and the game stops the character (a stop or turn animation) when
+ * the stick snaps to the centre or by 90 degrees between two frames. So: of two opposite keys
+ * the one pressed last wins (W+S walks, not stops); a gap of up to WALK_GAP_US with no key
+ * (W released just before D is pressed) keeps the last direction; and the direction turns
+ * toward the keys at WALK_TURN_RATE instead of jumping, except for a turn back (over 135
+ * degrees), which goes at once as on a pad. Returns 0 when no direction is held. */
+#define WALK_GAP_US 60000u
+#define WALK_TURN_RATE 14.0f /* radians per second: 90 degrees in about 110 ms */
+static int keyboard_walk(const int *neg, const int *pos, float *out_x, float *out_y) {
+    static int was_neg[2], was_pos[2], last_dir[2];
+    static float angle;
+    static int moving;
+    static uint64_t last_sample, last_held;
+    const uint64_t now=now_us();
+    const float dt=last_sample ? (float)(now-last_sample)*1e-6f : 0.0f;
+    last_sample=now;
+    float t[2];
+    for (int a=0;a<2;++a) {
+        if (neg[a] && !was_neg[a]) last_dir[a]=-1;
+        if (pos[a] && !was_pos[a]) last_dir[a]=1;
+        was_neg[a]=neg[a]; was_pos[a]=pos[a];
+        t[a]=neg[a] && pos[a] ? (float)last_dir[a] : (float)(pos[a]-neg[a]);
+    }
+    if (t[0]==0.0f && t[1]==0.0f) {
+        if (!moving) return 0;
+        if (now-last_held>WALK_GAP_US) { moving=0; return 0; }
+    } else {
+        const float target=SDL_atan2f(t[1],t[0]);
+        float diff=target-angle;
+        while (diff>3.14159265f) diff-=6.2831853f;
+        while (diff<-3.14159265f) diff+=6.2831853f;
+        const float step=WALK_TURN_RATE*(dt<0.1f ? dt : 0.1f);
+        if (!moving || SDL_fabsf(diff)>2.36f || SDL_fabsf(diff)<=step) angle=target;
+        else angle+=diff>0.0f ? step : -step;
+        moving=1;
+        last_held=now;
+    }
+    *out_x=SDL_cosf(angle);
+    *out_y=SDL_sinf(angle);
+    return 1;
+}
 static void sample_bindings(PadData *d, const bool *k) {
     load_bindings();
     const int captured=runtime_mouse_captured();
@@ -244,8 +288,10 @@ static void sample_bindings(PadData *d, const bool *k) {
         else if (act->touch) touch_click(d,act->touch==2);
         else d->buttons|=act->button;
     }
+    float lx, ly;
+    if (keyboard_walk(neg,pos,&lx,&ly)) { d->left_x=stick_byte(lx); d->left_y=stick_byte(ly); }
     uint8_t *sticks[2][2]={{&d->left_x,&d->left_y},{&d->right_x,&d->right_y}};
-    for (int s=0;s<2;++s) {
+    for (int s=1;s<2;++s) {
         float x=(float)(pos[s*2]-neg[s*2]), y=(float)(pos[s*2+1]-neg[s*2+1]);
         if (x==0.0f && y==0.0f) continue;
         if (x!=0.0f && y!=0.0f) { x*=0.70710678f; y*=0.70710678f; }

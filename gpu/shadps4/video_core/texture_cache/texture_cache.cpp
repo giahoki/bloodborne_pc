@@ -59,6 +59,21 @@ TextureCache::TextureCache(const Vulkan::Instance& instance_, Vulkan::Scheduler&
         std::max<u64>(std::min(device_local_memory - min_vacancy_critical, min_spacing_critical),
                       DEFAULT_CRITICAL_GC_MEMORY));
     trigger_gc_memory = static_cast<u64>((device_local_memory - mem_threshold) / 2);
+    // bbport: on a 4 GB card the budget is about 3 GB, so the fixed floors (1.5 and 3 GB) put
+    // the critical mark at the whole budget: the cache kept 3.5 GB of images, the driver moved
+    // the rest to system memory and the game ran at 16 FPS. Keep the marks inside the budget.
+    if (device_local_memory > 0) {
+        const u64 budget = static_cast<u64>(device_local_memory);
+        pressure_gc_memory = std::min<u64>(pressure_gc_memory, budget / 100 * 60);
+        critical_gc_memory = std::min<u64>(critical_gc_memory, budget / 100 * 80);
+        trigger_gc_memory = std::min<u64>(trigger_gc_memory, budget / 100 * 50);
+    }
+    std::printf("Texture cache: GPU memory budget %llu MiB, collection from %llu, pressure %llu, "
+                "critical %llu MiB\n",
+                (unsigned long long)(device_local_memory >> 20),
+                (unsigned long long)(trigger_gc_memory >> 20),
+                (unsigned long long)(pressure_gc_memory >> 20),
+                (unsigned long long)(critical_gc_memory >> 20));
 }
 
 TextureCache::~TextureCache() = default;
