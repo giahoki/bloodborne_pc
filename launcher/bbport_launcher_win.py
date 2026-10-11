@@ -40,11 +40,11 @@ PATCH_VERSION = '01.09'
 MAX_LOG_LINES = 6000
 NO_WINDOW = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
 # This build; GitHub release tags are windows-v<VERSION>.
-VERSION = '1.6'
+VERSION = '2.0'
 # Co-op: the community server that answers the game's own server requests.
 COMMUNITY_SERVER = 'https://thehuntersdream.com'
-RELEASES_API = 'https://api.github.com/repos/Supermedo/bloodborne_pc/releases/latest'
-RELEASES_PAGE = 'https://github.com/Supermedo/bloodborne_pc/releases/latest'
+RELEASES_API = 'https://api.github.com/repos/giahoki/bloodborne_pc/releases/latest'
+RELEASES_PAGE = 'https://github.com/giahoki/bloodborne_pc/releases/latest'
 UPDATE_DIR = Path(tempfile.gettempdir()) / 'bbport-update'
 # Never copied over an installation by an update (the package does not hold them either).
 USER_FILES = ('user', 'out', 'mods', 'bbport.ini', 'mods.json', 'patches.json', 'last_run.log')
@@ -139,9 +139,10 @@ EFFECTS = [
 ]
 EXTRAS = [
     ('skip_intro', ('Skip the intro logos and movie', 'Пропуск заставок при запуске'), False),
-    ('debug_camera', ('Free camera (hold Cross + L3; keyboard Space + Z)', 'Свободная камера (Cross + L3 / Space + Z)'), False),
-    ('debug_menu', ('Game debug menu (left touchpad / Tab; needs the debug fonts)',
-                    'Debug menu (левый touchpad / Tab; нужны шрифты)'), False),
+    ('debug_camera', ('Free camera (hold Interact and press Jump: E + F)',
+                      'Свободная камера (удерживать «Взаимодействие» и нажать «Прыжок»: E + F)'), False),
+    ('debug_menu', ('Game debug menu (the Gestures key, G; needs the debug fonts)',
+                    'Debug menu игры (клавиша жестов, G; нужны шрифты)'), False),
 ]
 # Cheats and gameplay tweaks: game patches for 1.09 (patches.py EFFECTS), off by default.
 CHEATS = [
@@ -149,8 +150,10 @@ CHEATS = [
     ('cheat_stealth', ('Enemies do not see you (unless attacked)', 'Враги не видят вас (пока не атакованы)'), False),
     ('cheat_silent', ('Enemies do not hear you', 'Враги не слышат вас'), False),
     ('cheat_rally_no_decay', ('Rally never fades', 'Rally не угасает'), False),
-    ('cheat_enemy_control', ('Control the targeted enemy (R3; L3 to go back; not with the free camera)',
-                             'Управление выбранным врагом (R3; L3 — назад; не вместе со свободной камерой)'), False),
+    ('cheat_enemy_control', ('Control the targeted enemy (Lock on, Q, takes control; Jump, F, goes back; '
+                             'not with the free camera)',
+                             'Управление выбранным врагом («Захват цели», Q — взять; «Прыжок», F — вернуться; '
+                             'не вместе со свободной камерой)'), False),
 ]
 TWEAKS = [
     ('tweak_no_rally', ('No Rally (hits do not give health back)', 'Без Rally (удары не возвращают здоровье)'), False),
@@ -160,11 +163,54 @@ TWEAKS = [
     ('tweak_ragdoll', ('Dark Souls-style ragdoll physics (corpses fly further)',
                        'Физика тел как в Dark Souls (тела отлетают дальше)'), False),
 ]
-INI_FLAGS = {'sharpen', 'object_motion', 'show_fps', *(k for k, _t, _o in EFFECTS + EXTRAS + CHEATS + TWEAKS)}
+# Keyboard and mouse by action (bbport.ini key_<action>, read by src/runtime_pad.c, which holds the
+# same defaults): groups of (action, (english, russian), default bindings separated by '|').
+KEY_BINDINGS = [
+    (('Movement', 'Движение'), [
+        ('move_forward', ('Forward', 'Вперёд'), 'W'),
+        ('move_back', ('Back', 'Назад'), 'S'),
+        ('move_left', ('Left', 'Влево'), 'A'),
+        ('move_right', ('Right', 'Вправо'), 'D'),
+        ('dodge_run', ('Dodge / run (hold)', 'Уклонение / бег (удерживать)'), 'Space'),
+        ('jump', ('Jump', 'Прыжок'), 'F'),
+    ]),
+    (('Combat', 'Бой'), [
+        ('attack', ('Attack', 'Атака'), 'Mouse1'),
+        ('strong_attack', ('Strong attack', 'Сильная атака'), 'Shift+Mouse1|Mouse5'),
+        ('gun', ('Firearm / parry', 'Огнестрел / парирование'), 'Mouse2'),
+        ('transform', ('Transform weapon', 'Трансформация оружия'), 'Shift+Mouse2|Mouse4'),
+        ('lock_on', ('Lock on', 'Захват цели'), 'Q|Mouse3'),
+    ]),
+    (('Items', 'Предметы'), [
+        ('blood_vial', ('Blood vial', 'Флакон крови'), 'R'),
+        ('use_item', ('Use item', 'Использовать предмет'), 'C'),
+        ('dpad_up', ('D-pad up', 'Крестовина вверх'), 'Up|WheelUp'),
+        ('dpad_down', ('D-pad down', 'Крестовина вниз'), 'Down|WheelDown'),
+        ('dpad_left', ('D-pad left (switch firearm)', 'Крестовина влево (смена огнестрела)'), 'Left'),
+        ('dpad_right', ('D-pad right (switch weapon)', 'Крестовина вправо (смена оружия)'), 'Right'),
+    ]),
+    (('Menus', 'Меню'), [
+        ('interact', ('Interact / confirm', 'Взаимодействие / подтвердить'), 'E|Return'),
+        ('back', ('Back (in menus)', 'Назад (в меню)'), 'Backspace'),
+        ('menu', ('Game menu', 'Меню игры'), 'Escape'),
+        ('gestures', ('Gestures', 'Жесты'), 'G'),
+        ('key_items', ('Key items', 'Ключевые предметы'), 'T'),
+    ]),
+    (('Camera keys (when the mouse camera is off)', 'Камера клавишами (если мышь выключена)'), [
+        ('camera_up', ('Camera up', 'Камера вверх'), ''),
+        ('camera_down', ('Camera down', 'Камера вниз'), ''),
+        ('camera_left', ('Camera left', 'Камера влево'), ''),
+        ('camera_right', ('Camera right', 'Камера вправо'), ''),
+    ]),
+]
+KEY_DEFAULTS = {f'key_{action}': default for _group, items in KEY_BINDINGS for action, _t, default in items}
+INI_FLAGS = {'sharpen', 'object_motion', 'show_fps', 'key_icons',
+             *(k for k, _t, _o in EFFECTS + EXTRAS + CHEATS + TWEAKS)}
 INI_DEFAULTS = {'upscaler': 'fsr4', 'preset': '1', 'sharpen': '1', 'sharpness': '0.50',
                 'object_motion': '1', 'show_fps': '1', 'output_res': '1920x1080', 'model_lod': '0',
-                'live_resolution': 'auto',
-                **{key: '1' if on else '0' for key, _t, on in EFFECTS + EXTRAS + CHEATS + TWEAKS}}
+                'live_resolution': 'auto', 'mouse_sensitivity': '1.00', 'key_icons': '1',
+                **{key: '1' if on else '0' for key, _t, on in EFFECTS + EXTRAS + CHEATS + TWEAKS},
+                **KEY_DEFAULTS}
 APP_DEFAULTS = {'ui_language': '', 'game_dir': str(PORT_DIR.parent / 'CUSA03173'), 'user_dir': '',
                 'mods_dir': '', 'mods_enabled': True, 'patches_dir': '', 'language': '1',
                 'player_name': '', 'fullscreen': False, 'hdr': False, 'present_mode': 'Mailbox',
@@ -613,7 +659,7 @@ class Launcher:
         side.pack_propagate(False)
         tk.Label(side, text='BLOODBORNE', bg=BG, fg=GOLD, font=('Georgia', 16)).pack(anchor='w', padx=22, pady=(24, 0))
         self.side = side
-        tk.Label(side, text=_('by Super Medo'), bg=BG, fg=TEXT, font=('Segoe UI', 10)).pack(anchor='w', padx=22)
+        tk.Label(side, text=_('by giahoki'), bg=BG, fg=TEXT, font=('Segoe UI', 10)).pack(anchor='w', padx=22)
         tk.Label(side, text=_('native port · Windows', 'нативный порт · Windows') + f'  ·  v{VERSION}' + ('\n' + _('co-op test build') if COOP_TEST else ''), bg=BG, fg=MUTED, justify='left',
                  font=('Segoe UI', 9)).pack(anchor='w', padx=22, pady=(0, 20))
         self.nav, self.current_page = {}, None
@@ -632,8 +678,8 @@ class Launcher:
             self.nav[name] = item
         tk.Frame(side, bg=BG).pack(fill='both', expand=True)
         self.update_box = None
-        self.side_note = tk.Label(side, text=_('In the game: Insert or L3+R3\nopens the port\'s menu.',
-                                               'В игре: Insert или L3+R3\nоткрывает меню порта.'),
+        self.side_note = tk.Label(side, text=_("In the game: Insert opens the port's menu\n(gamepad: press both sticks).",
+                                               'В игре: Insert открывает меню порта\n(геймпад: нажать оба стика).'),
                                   bg=BG, fg=MUTED, font=('Segoe UI', 9), justify='left', wraplength=self.px(210))
         self.side_note.pack(anchor='w', padx=22, pady=(0, 18))
 
@@ -764,8 +810,8 @@ class Launcher:
     def build_graphics(self):
         ttk = self.ttk
         f = self.scrolled_page('graphics', _('Graphics', 'Графика'),
-                               _('Stored in bbport.ini; the in-game menu (Insert or L3+R3) changes the same values.',
-                                 'Хранится в bbport.ini; в игре меняется через меню (Insert или L3+R3).'))
+                               _('Stored in bbport.ini; the in-game menu (Insert) changes the same values.',
+                                 'Хранится в bbport.ini; в игре меняется через меню (Insert).'))
         self.section(f, _('Upscaling', 'Апскейлинг'), top=4)
         self.row(f, _('Upscaler', 'Апскейлер'), self.choice(f, 'upscaler', 'ini', UPSCALERS),
                  _("Temporal upscaling with the game's own motion vectors. FSR 4 needs its assets (below) and "
@@ -1608,6 +1654,15 @@ def main():
         ctypes.windll.shcore.SetProcessDpiAwareness(1)  # sharp text on scaled displays
     except (AttributeError, OSError):
         pass
+    # The web window (launcher/web, WebView2); the Tkinter one when it is not available.
+    if not os.environ.get('BB_LAUNCHER_TK'):
+        try:
+            import bbport_launcher_web
+            if bbport_launcher_web.available():
+                bbport_launcher_web.run(LANG)
+                return
+        except Exception as error:  # a broken WebView2 install must not lock players out
+            print(f'Web launcher unavailable ({error}); using the classic window', file=sys.stderr)
     import tkinter as tk
     from tkinter import filedialog, messagebox, ttk
     root = tk.Tk()

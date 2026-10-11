@@ -10,7 +10,18 @@ cmake=${CMAKE_EXE:-cmake}
 # Only the Vulkan headers: MSYS2's C headers must not reach MSVC.
 rm -rf out/vkinclude && mkdir -p out/vkinclude
 cp -r /c/msys64/clang64/include/vulkan /c/msys64/clang64/include/vk_video out/vkinclude/
-"$cmake" -S gpu/dlss_bridge -B out/dlss-bridge -G "Visual Studio 17 2022" -A x64 \
+# The newest Visual Studio (2022 or 2026) unless DLSS_VS_GENERATOR names one.
+generator=${DLSS_VS_GENERATOR:-}
+if [[ -z $generator ]]; then
+    vswhere="/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe"
+    major=$("$vswhere" -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 \
+        -property installationVersion 2>/dev/null | tr -d '\r' | cut -d. -f1)
+    case $major in
+        18) generator="Visual Studio 18 2026" ;;
+        *) generator="Visual Studio 17 2022" ;;
+    esac
+fi
+"$cmake" -S gpu/dlss_bridge -B out/dlss-bridge -G "$generator" -A x64 \
     -DDLSS_SDK_ROOT="$(cygpath -m "$sdk")" -DVULKAN_INCLUDE="$(cygpath -m "$PWD/out/vkinclude")"
 "$cmake" --build out/dlss-bridge --config Release
 cp out/dlss-bridge/Release/bbport_dlss.dll "$sdk/lib/Windows_x86_64/rel/nvngx_dlss.dll" out/

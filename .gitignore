@@ -24,3 +24,15 @@ perf.data
 mods.json
 patches.json
 !launcher/bloodborne.png
+# Local tools and editors: Claude Code session files, IDA databases, IDE folders
+.claude/
+*.i64
+*.idb
+*.id0
+*.id1
+*.id2
+*.nam
+*.til
+.vscode/
+.idea/
+*.log

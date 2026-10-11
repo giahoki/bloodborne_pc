@@ -19,8 +19,25 @@
 #include <windows.h>
 /* 64-bit sizes and times; directories are never opened as CRT descriptors. */
 typedef struct _stat64 HostStat;
-#define host_stat(path,s) _stat64(path,s)
 #define host_fstat(fd,s) _fstat64(fd,s)
+/* The CRT's _stat64 describes a symbolic link itself (size 0), not its target. The mod overlay
+ * (scripts/mods.py) is made of links, so the size of a linked file comes from the file opened
+ * through the link. */
+static int host_stat(const char *path, HostStat *s) {
+    if (_stat64(path,s)) return -1;
+    if (!(s->st_mode & _S_IFDIR)) {
+        DWORD attributes=GetFileAttributesA(path);
+        if (attributes!=INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_REPARSE_POINT)) {
+            int fd=_open(path,_O_RDONLY|_O_BINARY);
+            if (fd>=0) {
+                HostStat target;
+                if (!_fstat64(fd,&target)) *s=target;
+                _close(fd);
+            }
+        }
+    }
+    return 0;
+}
 #define host_lseek _lseeki64
 #define O_DIRECTORY 0x40000000 /* bbport marker, removed before _open */
 #else
@@ -246,6 +263,11 @@ static int64_t do_open(const char *guest,int flags,int mode) {
     ++opens;
     pthread_mutex_unlock(&lock);
     if (audio_trace() && strstr(guest,"sound/")) printf("Audio trace: open(%s) -> fd %d, %lld bytes\n",guest,fd,(long long)s.st_size);
+    /* BB_OPEN_TRACE=<text>: opens whose guest path contains <text>, with the host path and size. */
+    static const char *open_trace; static int open_trace_read;
+    if (!open_trace_read) { open_trace=getenv("BB_OPEN_TRACE"); open_trace_read=1; }
+    if (open_trace && *open_trace && strstr(guest,open_trace))
+        printf("Open trace: %s -> %s, %lld bytes\n",guest,path,(long long)s.st_size);
     const char *mod_trace=getenv("BB_MOD_TRACE"), *mod_root=getenv("BB_MODS_DIR");
     if (mod_trace && mod_trace[0]=='1' && mod_root) {
         char actual[PATH_MAX],root[PATH_MAX];

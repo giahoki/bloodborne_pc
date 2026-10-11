@@ -223,8 +223,10 @@ def main():
     parser.add_argument('--mods-dir', required=True, type=Path)
     parser.add_argument('--config', type=Path)
     parser.add_argument('--enabled', choices=('0', '1'), default='1')
+    parser.add_argument('--extra', action='append', default=[], type=Path,
+                        help="the port's own layers (key_icons.py), below the player's mods")
     args = parser.parse_args()
-    layers = []
+    layers = [(extra.name, extra) for extra in args.extra if extra.is_dir()]
     if args.enabled == '1':
         # shadPS4's loose overlay convention, beside the original game.
         legacy = Path(str(args.game.resolve()) + '-mods')

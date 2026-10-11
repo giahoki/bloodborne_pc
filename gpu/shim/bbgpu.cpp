@@ -329,6 +329,10 @@ u32 ConsumeWithOverlaysScreenshotRequests() { return 0; }
 ScreenshotRequests ConsumeScreenshotRequests() { return {}; }
 } // namespace VideoCore
 
+extern "C" float bbgpu_mouse_sensitivity(void) {
+    return BbSettings::Get().mouse_sensitivity.load(std::memory_order_relaxed);
+}
+
 extern "C" int bbgpu_overlay_captures_input(void) {
     return BbOverlay::CapturesInput() ? 1 : 0;
 }

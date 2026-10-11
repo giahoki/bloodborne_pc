@@ -34,13 +34,13 @@ inline constexpr Effect Effects[] = {
     {"effect_dynamic_shadows", "Тени от динамических источников", true},
     {"effect_ssr", "Отражения SSR (не было в игре)", false},
     {"skip_intro", "Пропуск заставок при запуске", false},
-    {"debug_camera", "Свободная камера (Cross + L3)", false},
+    {"debug_camera", "Свободная камера (Взаимодействие + Прыжок: E + F)", false},
     {"debug_menu", "Debug menu (нужны файлы шрифтов)", false},
     {"cheat_no_death", "Чит: бессмертие (не ниже 1 HP)", false},
     {"cheat_stealth", "Чит: враги не замечают", false},
     {"cheat_silent", "Чит: враги не слышат", false},
     {"cheat_rally_no_decay", "Чит: Rally не угасает", false},
-    {"cheat_enemy_control", "Чит: управление врагом (R3 / L3)", false},
+    {"cheat_enemy_control", "Чит: управление врагом (Захват цели Q / Прыжок F)", false},
     {"tweak_no_rally", "Без Rally (возврата HP)", false},
     {"tweak_camera_distance", "Камера дальше", false},
     {"tweak_no_camera_rotation", "Без автоповорота камеры", false},
@@ -67,6 +67,8 @@ struct Values {
     std::atomic<float> reactive_max{0.9f};
     std::atomic<int> debug_view{DebugNone};
     std::atomic<bool> show_fps{false};
+    /// Native mouse camera speed (runtime_mouse.c reads it every camera update).
+    std::atomic<float> mouse_sensitivity{1.0f};
     // FSR 4 checks (menu): the provider's auto exposure, the jitter sign it is given.
     std::atomic<bool> fsr4_auto_exposure{true};
     std::atomic<bool> fsr4_invert_jitter{false};

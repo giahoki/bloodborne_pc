@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bloodborne</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<img id="art" alt="">
+<canvas id="sky"></canvas>
+<canvas id="ash"></canvas>
+<div id="grain"></div>
+
+<div id="app" class="loading">
+  <aside id="side">
+    <div class="brand">
+      <div class="title">BLOODBORNE</div>
+      <svg class="flourish" viewBox="0 0 220 16" aria-hidden="true">
+        <path d="M2 8 H92 M128 8 H218" stroke="currentColor" stroke-width="1"/>
+        <path d="M110 1 L117 8 L110 15 L103 8 Z" fill="none" stroke="currentColor" stroke-width="1.2"/>
+        <circle cx="110" cy="8" r="1.6" fill="currentColor"/>
+        <circle cx="96" cy="8" r="1.2" fill="currentColor"/><circle cx="124" cy="8" r="1.2" fill="currentColor"/>
+      </svg>
+      <div class="by" id="by"></div>
+      <div class="sub" id="sub"></div>
+    </div>
+    <nav id="nav"></nav>
+    <div id="update" hidden>
+      <div class="update-text" id="update-text"></div>
+      <button class="btn small" id="update-install"></button>
+      <button class="btn small ghost" id="update-news"></button>
+    </div>
+    <div class="side-note" id="side-note"></div>
+  </aside>
+
+  <main id="main">
+    <section class="page" id="page-play">
+      <div class="hero">
+        <div class="hero-title">Bloodborne</div>
+        <div class="hero-sub" id="hero-sub"></div>
+      </div>
+      <div class="cards">
+        <div class="card">
+          <h3 id="ready-title"></h3>
+          <ul class="checks" id="checks"></ul>
+        </div>
+        <div class="card">
+          <h3 id="quick-title"></h3>
+          <div class="form" id="quick"></div>
+        </div>
+      </div>
+    </section>
+    <div id="pages"></div>
+    <section class="page" id="page-log">
+      <div class="page-head">
+        <h1 id="log-title"></h1>
+        <div class="head-actions">
+          <button class="btn small ghost" id="log-clear"></button>
+          <button class="btn small" id="log-copy"></button>
+        </div>
+      </div>
+      <pre id="log"></pre>
+    </section>
+  </main>
+
+  <footer id="bar">
+    <div id="status"></div>
+    <button class="btn ghost" id="stop" disabled></button>
+    <button id="play"><span class="play-inner"><span class="play-label"></span></span></button>
+  </footer>
+</div>
+
+<div id="toasts"></div>
+<script src="sky.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

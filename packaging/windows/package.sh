@@ -22,7 +22,10 @@ export USERPROFILE=${USERPROFILE:-$(cygpath -w "/c/Users/$(id -un)")}
 if [[ ! -x out/pyenv/Scripts/python.exe ]]; then
     "$python" -m venv out/pyenv
 fi
-out/pyenv/Scripts/python.exe -m pip install -q --disable-pip-version-check pyinstaller
+# pywebview: the launcher window (launcher/web on WebView2; the Tkinter one is the fallback).
+# Pillow and deflate (libdeflate): scripts/key_icons.py draws the keyboard button prompts and packs
+# the archive smaller than the game's own (the launcher also scales the cover with Pillow).
+out/pyenv/Scripts/python.exe -m pip install -q --disable-pip-version-check pyinstaller pywebview pillow deflate
 # The scripts run inside Bloodborne.exe (--script): the standard modules they import come along.
 hidden=()
 for module in argparse base64 collections hashlib json re shutil struct tempfile xml.etree.ElementTree \
@@ -32,6 +35,9 @@ done
 out/pyenv/Scripts/python.exe -m PyInstaller --noconfirm --clean --log-level WARN --windowed \
     --name Bloodborne --icon "$(cygpath -w "$PWD/launcher/bloodborne.ico")" --distpath out/pyi-dist \
     --workpath out/pyi-work --specpath out/pyi-work --paths "$(cygpath -w "$PWD/scripts")" "${hidden[@]}" \
+    --hidden-import bbport_launcher_web --collect-all webview \
+    --hidden-import PIL.Image --hidden-import PIL.ImageDraw --hidden-import PIL.ImageFont --hidden-import deflate \
+    --add-data "$(cygpath -w "$PWD/launcher/web");web" \
     "$(cygpath -w "$PWD/launcher/bbport_launcher_win.py")"
 
 # The package is assembled in a fresh staging folder and zipped from there; dist/bbport-windows
@@ -53,7 +59,12 @@ ldd "$dest/bin/bb-probe.exe" "$dest/bin/bb-gpu-capabilities.exe" |
     done
 cp -r scripts patches "$dest/"
 cp run.py LICENSE README.md packaging/windows/README-Windows.txt "$dest/"
-if [[ -d fsr4_shaders ]]; then cp -r fsr4_shaders "$dest/"; fi
+# FSR 4 assets (tools/fetch_fsr4_assets.sh, or copied to the repository root by hand).
+if [[ -d fsr4_shaders ]]; then
+    cp -r fsr4_shaders "$dest/"
+else
+    echo "fsr4_shaders/ not found: the package has no FSR 4 (players can download it in the launcher)" >&2
+fi
 # DLSS (NVIDIA RTX): the MSVC-built bridge and NVIDIA's runtime, next to bb-probe.exe
 # (packaging/windows/build_dlss.sh). Without them the DLSS option stays unavailable.
 if [[ -f out/bbport_dlss.dll && -f out/nvngx_dlss.dll ]]; then

@@ -153,10 +153,13 @@ def main():
     if not (game / 'eboot.bin').is_file():
         fail(f'No eboot.bin in {game} (set BB_GAME_DIR).')
     original_game = game.resolve()
+    # Keyboard and mouse button prompts drawn from the bindings (bbport.ini key_icons=0: off).
+    icons = run_script('key_icons.py', game, '--out', out, '--config', config, capture=True).strip()
     game = Path(run_script('mods.py', game, '--out', out,
                            '--mods-dir', env.get('BB_MODS_DIR', data / 'mods'),
                            '--config', env.get('BB_MODS_CONFIG', data / 'mods.json'),
-                           '--enabled', env.get('BB_MODS_ENABLED', '1'), capture=True).strip())
+                           '--enabled', env.get('BB_MODS_ENABLED', '1'),
+                           *(('--extra', icons) if icons else ()), capture=True).strip())
     mod_view = game if game.resolve() != original_game else None
     try:
         run_script('prepare.py', game, '--out', out)

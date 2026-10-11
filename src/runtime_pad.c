@@ -1,11 +1,6 @@
-/* libScePad on SDL3 gamepads, with a keyboard fallback. SDL events are pumped
- * by the window thread (gpu/shim/window.cpp); here state is only sampled.
- *
- * Keyboard layout (when no gamepad is connected):
- *   WASD left stick, arrow keys right stick, Space Cross, LShift Circle,
- *   E Square, Q Triangle, 1 L1, 3 R1, R L2, F R2, Z L3, C R3,
- *   Enter Options, Tab left touchpad, Backspace right touchpad,
- *   IJKL d-pad (I up, K down, J left, L right). */
+/* libScePad on SDL3 gamepads plus keyboard and mouse. SDL events are pumped by the
+ * window thread (gpu/shim/window.cpp); here state is only sampled. Keyboard and mouse
+ * work by action with bindings from bbport.ini (sample_bindings), next to a gamepad. */
 #define _GNU_SOURCE
 #include "runtime.h"
 #include "gpu/bbgpu.h"
@@ -89,6 +84,178 @@ static SDL_Gamepad *current_gamepad(void) {
     }
     return gamepad;
 }
+/* Keyboard and mouse, by action, as in the PC Souls games: bbport.ini key_<action>=binding|binding
+ * (the launcher's Controls page edits them; an empty value unbinds). A binding is an SDL key name
+ * ("Space", "Return", "Left Shift", "F"), Mouse1..Mouse5 or WheelUp/WheelDown, optionally after
+ * Shift+, Ctrl+ or Alt+. A binding with a modifier wins over the same input without one
+ * (Shift+Mouse1 strong attack, Mouse1 attack). Mouse inputs count only while the cursor is
+ * captured (runtime_mouse.c). The file is re-read when it changes, also during play. Keys held
+ * for movement override the stick; diagonals stay on the stick's circle. Reserved by the port:
+ * Insert (menu), F9 (pad recording), F10 (mouse camera), left Alt (free the cursor). */
+enum { IN_KEY, IN_MOUSE, IN_WHEEL };
+enum { MOD_SHIFT=1, MOD_CTRL=2, MOD_ALT=4 };
+enum { AX_LX, AX_LY, AX_RX, AX_RY };
+typedef struct { uint8_t type, mod; int16_t code; } Input;
+typedef struct {
+    const char *name;
+    uint32_t button;  /* pad buttons, or 0 */
+    int8_t axis, dir; /* stick direction when axis >= 0 */
+    int8_t touch;     /* 1 left, 2 right touchpad half */
+    const char *defaults;
+} Action;
+static const Action actions[]={
+    {"move_forward",0,AX_LY,-1,0,"W"}, {"move_back",0,AX_LY,1,0,"S"},
+    {"move_left",0,AX_LX,-1,0,"A"}, {"move_right",0,AX_LX,1,0,"D"},
+    {"dodge_run",BTN_CIRCLE,-1,0,0,"Space"},
+    {"jump",BTN_L3,-1,0,0,"F"},
+    {"interact",BTN_CROSS,-1,0,0,"E|Return"},
+    {"back",BTN_CIRCLE,-1,0,0,"Backspace"},
+    {"attack",BTN_R1,-1,0,0,"Mouse1"},
+    {"strong_attack",BTN_R2,-1,0,0,"Shift+Mouse1|Mouse5"},
+    {"gun",BTN_L2,-1,0,0,"Mouse2"},
+    {"transform",BTN_L1,-1,0,0,"Shift+Mouse2|Mouse4"},
+    {"lock_on",BTN_R3,-1,0,0,"Q|Mouse3"},
+    {"blood_vial",BTN_TRIANGLE,-1,0,0,"R"},
+    {"use_item",BTN_SQUARE,-1,0,0,"C"},
+    {"dpad_up",BTN_UP,-1,0,0,"Up|WheelUp"},
+    {"dpad_down",BTN_DOWN,-1,0,0,"Down|WheelDown"},
+    {"dpad_left",BTN_LEFT,-1,0,0,"Left"},
+    {"dpad_right",BTN_RIGHT,-1,0,0,"Right"},
+    {"menu",BTN_OPTIONS,-1,0,0,"Escape"},
+    {"gestures",0,-1,0,1,"G"},
+    {"key_items",0,-1,0,2,"T"},
+    {"camera_up",0,AX_RY,-1,0,""}, {"camera_down",0,AX_RY,1,0,""},
+    {"camera_left",0,AX_RX,-1,0,""}, {"camera_right",0,AX_RX,1,0,""},
+};
+#define ACTION_COUNT (sizeof(actions)/sizeof(*actions))
+#define MAX_BINDINGS 4
+static Input bound[ACTION_COUNT][MAX_BINDINGS];
+static uint8_t bound_count[ACTION_COUNT];
+
+static int parse_input(const char *text, Input *in) {
+    in->mod=0;
+    for (;;) {
+        const char *plus=strchr(text,'+');
+        if (!plus || plus==text || !plus[1]) break;
+        size_t n=(size_t)(plus-text);
+        if (n==5 && !SDL_strncasecmp(text,"Shift",5)) in->mod|=MOD_SHIFT;
+        else if (n==4 && !SDL_strncasecmp(text,"Ctrl",4)) in->mod|=MOD_CTRL;
+        else if (n==3 && !SDL_strncasecmp(text,"Alt",3)) in->mod|=MOD_ALT;
+        else break;
+        text=plus+1;
+    }
+    if (!SDL_strncasecmp(text,"Mouse",5) && text[5]>='1' && text[5]<='5' && !text[6]) {
+        in->type=IN_MOUSE; in->code=(int16_t)(text[5]-'0'); return 1;
+    }
+    if (!SDL_strcasecmp(text,"WheelUp")) { in->type=IN_WHEEL; in->code=1; return 1; }
+    if (!SDL_strcasecmp(text,"WheelDown")) { in->type=IN_WHEEL; in->code=-1; return 1; }
+    SDL_Scancode sc=SDL_GetScancodeFromName(text);
+    if (sc==SDL_SCANCODE_UNKNOWN) return 0;
+    in->type=IN_KEY; in->code=(int16_t)sc;
+    return 1;
+}
+static void bind_list(size_t a, const char *list) {
+    char buf[256], *save=NULL;
+    snprintf(buf,sizeof(buf),"%s",list);
+    bound_count[a]=0;
+    for (char *tok=SDL_strtok_r(buf,"|",&save);tok;tok=SDL_strtok_r(NULL,"|",&save)) {
+        while (*tok==' ' || *tok=='\t') ++tok;
+        char *end=tok+strlen(tok);
+        while (end>tok && (end[-1]==' ' || end[-1]=='\t' || end[-1]=='\r' || end[-1]=='\n')) *--end=0;
+        Input in;
+        if (*tok && bound_count[a]<MAX_BINDINGS && parse_input(tok,&in)) bound[a][bound_count[a]++]=in;
+        else if (*tok) printf("Runtime: unknown key binding '%s' for %s\n",tok,actions[a].name);
+    }
+}
+/* Defaults, then the key_<action> lines of bbport.ini (BB_CONFIG); again when the file changes. */
+static void load_bindings(void) {
+    static const char *path; static int ready; static uint64_t last; static long long stamp=-1;
+    const uint64_t now=now_us();
+    if (ready && now-last<500000) return;
+    last=now;
+    if (!ready) {
+        ready=1;
+        path=getenv("BB_CONFIG");
+        if (!path || !*path) path="bbport.ini";
+        for (size_t a=0;a<ACTION_COUNT;++a) bind_list(a,actions[a].defaults);
+    }
+    struct stat st;
+    if (stat(path,&st)!=0) return;
+    const long long now_stamp=(long long)st.st_mtime*1000003LL+(long long)st.st_size;
+    if (now_stamp==stamp) return;
+    stamp=now_stamp;
+    FILE *f=fopen(path,"r");
+    if (!f) return;
+    for (size_t a=0;a<ACTION_COUNT;++a) bind_list(a,actions[a].defaults);
+    char line[512];
+    while (fgets(line,sizeof(line),f)) {
+        if (strncmp(line,"key_",4)) continue;
+        char *eq=strchr(line,'=');
+        if (!eq) continue;
+        *eq=0;
+        for (size_t a=0;a<ACTION_COUNT;++a) if (!strcmp(line+4,actions[a].name)) bind_list(a,eq+1);
+    }
+    fclose(f);
+    printf("Runtime: key bindings from %s\n",path);
+}
+static int input_down(const Input *in, const bool *k, uint32_t mouse, int wheel) {
+    switch (in->type) {
+    case IN_KEY: return k && k[in->code];
+    case IN_MOUSE: return (int)((mouse>>in->code)&1u);
+    default: return wheel==in->code;
+    }
+}
+static uint8_t stick_byte(float v) {
+    int x=(int)(128.0f+v*127.5f);
+    return (uint8_t)(x<0 ? 0 : x>255 ? 255 : x);
+}
+static void sample_bindings(PadData *d, const bool *k) {
+    load_bindings();
+    const int captured=runtime_mouse_captured();
+    const uint32_t mouse=captured ? runtime_mouse_buttons() : 0;
+    const int wheel=captured ? runtime_mouse_wheel_held() : 0;
+    int mods=0;
+    if (k) {
+        if (k[SDL_SCANCODE_LSHIFT] || k[SDL_SCANCODE_RSHIFT]) mods|=MOD_SHIFT;
+        if (k[SDL_SCANCODE_LCTRL] || k[SDL_SCANCODE_RCTRL]) mods|=MOD_CTRL;
+        if (k[SDL_SCANCODE_LALT] || k[SDL_SCANCODE_RALT]) mods|=MOD_ALT;
+    }
+    /* Inputs claimed by an active binding with a modifier: their plain bindings stay off. */
+    Input taken[16]; int ntaken=0;
+    for (size_t a=0;a<ACTION_COUNT;++a)
+        for (int b=0;b<bound_count[a];++b) {
+            const Input *in=&bound[a][b];
+            if (in->mod && (mods&in->mod)==in->mod && input_down(in,k,mouse,wheel) && ntaken<16) taken[ntaken++]=*in;
+        }
+    int neg[4]={0}, pos[4]={0};
+    for (size_t a=0;a<ACTION_COUNT;++a) {
+        int active=0;
+        for (int b=0;b<bound_count[a] && !active;++b) {
+            const Input *in=&bound[a][b];
+            if (!input_down(in,k,mouse,wheel)) continue;
+            if (in->mod) { active=(mods&in->mod)==in->mod; continue; }
+            int claimed=0;
+            for (int t=0;t<ntaken;++t) if (taken[t].type==in->type && taken[t].code==in->code) claimed=1;
+            active=!claimed;
+        }
+        if (!active) continue;
+        const Action *act=&actions[a];
+        if (act->axis>=0) { if (act->dir<0) neg[act->axis]=1; else pos[act->axis]=1; }
+        else if (act->touch) touch_click(d,act->touch==2);
+        else d->buttons|=act->button;
+    }
+    uint8_t *sticks[2][2]={{&d->left_x,&d->left_y},{&d->right_x,&d->right_y}};
+    for (int s=0;s<2;++s) {
+        float x=(float)(pos[s*2]-neg[s*2]), y=(float)(pos[s*2+1]-neg[s*2+1]);
+        if (x==0.0f && y==0.0f) continue;
+        if (x!=0.0f && y!=0.0f) { x*=0.70710678f; y*=0.70710678f; }
+        *sticks[s][0]=stick_byte(x);
+        *sticks[s][1]=stick_byte(y);
+    }
+    if (d->buttons & BTN_L2) d->l2=255;
+    if (d->buttons & BTN_R2) d->r2=255;
+}
+
 static void sample_host(PadData *d) {
     memset(d,0,sizeof(*d));
     d->left_x=d->left_y=d->right_x=d->right_y=128;
@@ -128,27 +295,8 @@ static void sample_host(PadData *d) {
         }
         // Back/Select on pads without a touch surface is a left-side click.
         if ((d->buttons & BTN_TOUCHPAD) && !d->touch_count) touch_click(d,0);
-        if (k && k[SDL_SCANCODE_TAB]) touch_click(d,0);
-        if (k && k[SDL_SCANCODE_BACKSPACE]) touch_click(d,1);
-        return;
     }
-    if (!k) return;
-    static const struct { SDL_Scancode key; uint32_t ps; } keys[]={
-        {SDL_SCANCODE_SPACE,BTN_CROSS}, {SDL_SCANCODE_LSHIFT,BTN_CIRCLE}, {SDL_SCANCODE_E,BTN_SQUARE},
-        {SDL_SCANCODE_Q,BTN_TRIANGLE}, {SDL_SCANCODE_1,BTN_L1}, {SDL_SCANCODE_3,BTN_R1},
-        {SDL_SCANCODE_R,BTN_L2}, {SDL_SCANCODE_F,BTN_R2}, {SDL_SCANCODE_Z,BTN_L3}, {SDL_SCANCODE_C,BTN_R3},
-        {SDL_SCANCODE_RETURN,BTN_OPTIONS},
-        {SDL_SCANCODE_I,BTN_UP}, {SDL_SCANCODE_K,BTN_DOWN}, {SDL_SCANCODE_J,BTN_LEFT}, {SDL_SCANCODE_L,BTN_RIGHT},
-    };
-    for (size_t i=0;i<sizeof(keys)/sizeof(*keys);++i) if (k[keys[i].key]) d->buttons|=keys[i].ps;
-    if (k[SDL_SCANCODE_TAB]) touch_click(d,0);
-    if (k[SDL_SCANCODE_BACKSPACE]) touch_click(d,1);
-    if (d->buttons & BTN_L2) d->l2=255;
-    if (d->buttons & BTN_R2) d->r2=255;
-    d->left_x=(uint8_t)(128-(k[SDL_SCANCODE_A] ? 128 : 0)+(k[SDL_SCANCODE_D] ? 127 : 0));
-    d->left_y=(uint8_t)(128-(k[SDL_SCANCODE_W] ? 128 : 0)+(k[SDL_SCANCODE_S] ? 127 : 0));
-    d->right_x=(uint8_t)(128-(k[SDL_SCANCODE_LEFT] ? 128 : 0)+(k[SDL_SCANCODE_RIGHT] ? 127 : 0));
-    d->right_y=(uint8_t)(128-(k[SDL_SCANCODE_UP] ? 128 : 0)+(k[SDL_SCANCODE_DOWN] ? 127 : 0));
+    sample_bindings(d,k);
 }
 
 /* BB_PAD_FILE=<file>: scripted input for automated runs. The file holds whitespace-separated
@@ -313,6 +461,11 @@ static ABI int32_t pad_close(int32_t handle) {
 static ABI int32_t pad_read_state(int32_t handle, PadData *data) {
     if (handle!=PAD_HANDLE || !opened) return ERR_INVALID_HANDLE;
     if (!data) return ERR_INVALID_ARG;
+    static int caller_logged;
+    if (!caller_logged && getenv("BB_PAD_DEBUG")) {
+        caller_logged=1;
+        printf("Runtime: scePadReadState called from host %p, buffer %p\n",__builtin_return_address(0),(void *)data);
+    }
     pthread_mutex_lock(&lock);
     sample(data); ++reads;
     pthread_mutex_unlock(&lock);
@@ -322,6 +475,11 @@ static ABI int32_t pad_read_state(int32_t handle, PadData *data) {
 static ABI int32_t pad_read(int32_t handle, PadData *data, int32_t count) {
     if (handle!=PAD_HANDLE || !opened) return ERR_INVALID_HANDLE;
     if (!data || count<1 || count>64) return ERR_INVALID_ARG;
+    static int caller_logged;
+    if (!caller_logged && getenv("BB_PAD_DEBUG")) {
+        caller_logged=1;
+        printf("Runtime: scePadRead called from host %p, buffer %p\n",__builtin_return_address(0),(void *)data);
+    }
     pad_read_state(handle,data);
     return 1;
 }

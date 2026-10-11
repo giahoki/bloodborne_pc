@@ -40,6 +40,8 @@ private:
     std::atomic<bool> is_open{true};
     std::mutex text_mutex;
     bool text_requested{}, text_active{};
+    bool mouse_captured{}; ///< relative mouse mode for the native mouse camera (window thread)
+    bool mouse_enabled{true}; ///< F10 turns the mouse camera off and on
     int text_state{};
     std::string text, text_prompt, base_title;
     void UpdateTextTitle();

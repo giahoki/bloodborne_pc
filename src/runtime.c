@@ -80,6 +80,7 @@ void runtime_report(void) {
     runtime_ajm_report();
     runtime_audio_report();
     runtime_pad_report();
+    runtime_mouse_report();
     runtime_savedata_report();
     runtime_file_report();
     printf("Runtime: memory operations=%zu\n", (size_t)memory_calls);

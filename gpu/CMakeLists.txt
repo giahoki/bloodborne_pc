@@ -4,6 +4,11 @@ cmake_minimum_required(VERSION 3.24)
 project(bbgpu LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# Newer MSYS2 libc++ (clang 23) no longer includes these headers transitively; the vendored
+# code (sirit, AMD FidelityFX, shadPS4) relies on that. C++ only, every target below.
+if(MINGW)
+    string(APPEND CMAKE_CXX_FLAGS " -include cstdlib -include cwchar -include cmath -include new")
+endif()
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE RelWithDebInfo)

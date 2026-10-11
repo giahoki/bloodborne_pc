@@ -161,7 +161,7 @@ void Menu() {
                             ImGuiCond_Appearing);
     ImGui::SetNextWindowSize(ImVec2(620.0f * base_scale, 0.0f), ImGuiCond_Appearing);
     bool keep_open = true;
-    if (!ImGui::Begin("Bloodborne — настройки  (Insert / L3+R3)", &keep_open,
+    if (!ImGui::Begin("Bloodborne — настройки  (Insert)", &keep_open,
                       ImGuiWindowFlags_NoCollapse)) {
         ImGui::End();
         return;
@@ -362,9 +362,9 @@ void Menu() {
     }
     Hint("Эффекты включаются и выключаются патчами игры при запуске (patches/Bloodborne.xml). "
          "Размытие в движении и тени от динамических источников заметно нагружают GPU.");
-    Hint("Свободная камера: удерживайте Cross и нажимайте L3 (клавиатура: Space + Z). "
-         "Debug menu: левый touchpad / Tab. Нужны DbgFont14h.ccm и DbgFont14h.tpf "
-         "в dvdroot_ps4/font из мода Nexus #253. Правый touchpad: Backspace.");
+    Hint("Свободная камера: удерживайте «Взаимодействие» (E) и нажимайте «Прыжок» (F). "
+         "Debug menu: клавиша жестов (G). Нужны DbgFont14h.ccm и DbgFont14h.tpf "
+         "в dvdroot_ps4/font из мода Nexus #253. Ключевые предметы: T.");
 
     bool restart = s.object_motion != s.startup_object_motion ||
                    s.model_lod != s.startup_model_lod ||
@@ -381,6 +381,10 @@ void Menu() {
             runtime_restart();
         }
     }
+
+    ImGui::SeparatorText("Мышь");
+    Slider("Чувствительность мыши", s.mouse_sensitivity, 0.1f, 5.0f);
+    Hint("Скорость поворота камеры мышью, меняется сразу. Левый Alt отпускает курсор, F10 выключает мышиную камеру.");
 
     ImGui::SeparatorText("Прочее");
     Checkbox("Счётчик FPS в углу", s.show_fps);
@@ -417,7 +421,7 @@ void TextEntryBox() {
     ImGui::SetWindowFontScale(1.0f);
     ImGui::Separator();
     ImGui::TextDisabled("Keyboard: type, Backspace to erase, Enter = OK, Esc = cancel");
-    ImGui::TextDisabled("Controller: Cross (A) = OK, Circle (B) = cancel");
+    ImGui::TextDisabled("Enter — OK, Esc — отмена (геймпад: нижняя кнопка — OK, правая — отмена)");
     ImGui::End();
 }
 
